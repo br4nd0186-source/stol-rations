@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STOL | Control de Desayunos Offline</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🍱 STOL Logistics</h1>
+        <p class="subtitle">Control de Raciones (Modo App)</p>
+    </header>
+
+    <div id="alerts-container" class="alerts-container" style="display:none;"></div>
+
+    <section class="main-form">
+        <form onsubmit="event.preventDefault(); validarAcceso(document.getElementById('dniInput').value);">
+            <input id="dniInput" type="text" placeholder="Ingrese o escanee DNI" autofocus required autocomplete="off">
+            <button type="submit">Validar Acceso</button>
+        </form>
+    </section>
+
+    <div id="status-card" class="status-card" style="display:none;">
+        <div id="status-msg" class="status-msg"></div>
+        
+        <div id="admin-actions" class="admin-actions" style="display:none;">
+            <p class="admin-label">Gestión de Administrador</p>
+            <div class="action-buttons">
+                <button onclick="toggle('form-exc')" class="btn-warning">Excepción</button>
+                <button onclick="toggle('form-tra')" class="btn-secundario">Transferir Ración</button>
+            </div>
+
+            <div id="form-exc" style="display:none; margin-top:12px;">
+                <input type="password" id="pass-exc" placeholder="Clave Admin">
+                <button onclick="ejecutarExcepcion()" class="btn-confirm-exc">Aprobar DNI actual</button>
+            </div>
+
+            <div id="form-tra" style="display:none; margin-top:12px; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                <p class="form-hint" style="color: #666; font-size: 0.9em; margin-bottom: 5px;">🔍 Busque al operario que NO vino:</p>
+                
+                <input type="text" id="busqueda-reemplazo" placeholder="Escriba nombre o DNI..." 
+                    oninput="filtrarPendientes(this.value)" class="select-admin" style="width: 100%;">
+                
+                <div id="lista-reemplazos-sugeridos" class="sugerencias-container"></div>
+                
+                <input type="hidden" id="dni-ausente-hidden">
+
+                <input type="password" id="pass-tra" placeholder="Clave Admin" style="margin-top:10px; width: 100%;">
+                <button onclick="ejecutarTransferencia()" class="btn-confirm-tra" style="margin-top:10px; width: 100%;">Confirmar Cambio</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-section">
+        <div class="progress-info">
+            <span>Raciones entregadas</span>
+            <strong id="progress-text">0 / 0</strong>
+        </div>
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <footer class="admin-footer">
+        <div id="admin-login-section">
+            <details class="staff-access">
+                <summary>Acceso Administrador</summary>
+                <div style="padding: 10px;">
+                    <input type="password" id="admin-pass-input" placeholder="Clave de acceso" style="width: 100%; margin-bottom: 10px;">
+                    <button onclick="loginAdmin()" style="width: 100%;">Entrar al Panel</button>
+                </div>
+            </details>
+        </div>
+
+        <div id="admin-panel-locked" class="admin-panel-logged" style="display:none;">
+            <p class="panel-title">Panel de Control (Activo)</p>
+            
+            <label class="btn-upload" style="display: block; text-align: center; cursor: pointer; margin-bottom: 10px;">
+                📁 Cargar Excel del Personal
+                <input type="file" id="fileInput" accept=".xlsx, .xls" style="display:none;" onchange="cargarListaExcel(this)">
+            </label>
+
+            <div class="admin-nav">
+                <button onclick="exportarReporte()" class="btn-report" style="width:100%; margin-bottom: 10px;">📥 Descargar Reporte Excel</button>
+                <button onclick="logoutAdmin()" class="btn-logout" style="width:100%;">Cerrar Sesión Admin</button>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<button onclick="abrirModal()" class="fab-auditoria">📊</button>
+
+<div id="modalAuditoria" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>📋 Auditoría en Tiempo Real</h2>
+            <button onclick="cerrarModal()" class="btn-close">Cerrar [X]</button>
+        </div>
+        <div class="modal-body">
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>HORA</th>
+                        <th>DNI</th>
+                        <th>NOMBRE</th>
+                        <th>ESTADO</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+    // Funciones visuales sencillas
+    function toggle(id) {
+        document.getElementById('form-exc').style.display = 'none';
+        document.getElementById('form-tra').style.display = 'none';
+        const el = document.getElementById(id);
+        el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+    }
+
+    function abrirModal() { 
+        renderizarAuditoria(); // Función que debe estar en app.js
+        document.getElementById('modalAuditoria').style.display = 'flex'; 
+    }
+    function cerrarModal() { document.getElementById('modalAuditoria').style.display = 'none'; }
+    
+    // Cerrar modal al tocar fuera
+    window.onclick = function(event) {
+        let modal = document.getElementById('modalAuditoria');
+        if (event.target == modal) cerrarModal();
+    }
+</script>
+
+</body>
+</html>
