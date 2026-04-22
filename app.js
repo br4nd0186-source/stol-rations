@@ -49,7 +49,7 @@ function validarAcceso(inputUsuario) {
     }
 
     // 3. Procesar resultados
-    if (hora >= 19) {
+    if (hora >= 23) {
         actualizarUI("❌ SISTEMA CERRADO (Fin de jornada)", "mensaje-error", false);
     } else if (!dniEncontrado) {
         // AQUÍ ESTABA EL ERROR: Aseguramos que guarde lo que el usuario escribió para la excepción
