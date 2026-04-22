@@ -262,12 +262,12 @@ function exportarReporte() {
     // --- LÓGICA DE CONTEO ---
     const totalNomina = Object.keys(DATA).length;
     const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
-    const pendientes = totalNomina - entregadosNomina - CEDIDOS.length;
     const cambiados = CEDIDOS.length;
     const agregadosExtra = INTENTOS.filter(reg => !DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")).length;
     const granTotalEntregados = entregadosNomina + agregadosExtra;
+    const pendientes = totalNomina - entregadosNomina - cambiados;
 
-    // 1. CREAMOS EL BLOQUE DE RESUMEN (Primeras filas del Excel)
+    // 1. BLOQUE DE RESUMEN
     reporteFinal.push({ "DNI": "RESUMEN DE JORNADA", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
     reporteFinal.push({ "DNI": "Total en Nómina:", "NOMBRE": totalNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
     reporteFinal.push({ "DNI": "Entregados (de lista):", "NOMBRE": entregadosNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
@@ -275,10 +275,9 @@ function exportarReporte() {
     reporteFinal.push({ "DNI": "TOTAL ENTREGADOS:", "NOMBRE": granTotalEntregados, "AREA": "", "ESTADO": "CONFIRMADO", "OBSERVACIÓN": "" });
     reporteFinal.push({ "DNI": "Pendientes (No vinieron):", "NOMBRE": pendientes, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
     reporteFinal.push({ "DNI": "Raciones Cambiadas:", "NOMBRE": cambiados, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" }); // Fila vacía separadora
-    reporteFinal.push({ "DNI": "DETALLE POR PERSONA", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
 
-    // 2. PROCESAR LISTA DETALLADA
+    // 2. DETALLE POR PERSONA
     Object.keys(DATA).forEach(dni => {
         const persona = DATA[dni];
         let estado = "NO RECOGIDO";
@@ -303,7 +302,7 @@ function exportarReporte() {
         });
     });
 
-    // 3. AGREGAR LOS EXTRAS AL FINAL
+    // 3. EXTRAS
     INTENTOS.forEach(reg => {
         if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
             reporteFinal.push({
@@ -316,34 +315,13 @@ function exportarReporte() {
         }
     });
 
-    // Generar archivo
-    const ws = XLSX.utils.json_to_sheet(reporteFinal);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte STOL");
-    XLSX.writeFile(wb, `Reporte_Desayunos_STOL.xlsx`);
-}
-    // 2. Agregar los que entraron por excepción o adicionales
-    INTENTOS.forEach(reg => {
-        if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
-            reporteFinal.push({
-                "DNI": reg.DNI,
-                "NOMBRE": reg.Nombre,
-                "AREA": "ADICIONAL",
-                "ESTADO": reg.Estado,
-                "OBSERVACIÓN / REEMPLAZO": reg.Referencia_Auditoria
-            });
-        }
-    });
-
-// Generar archivo
     const ws = XLSX.utils.json_to_sheet(reporteFinal);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Reporte STOL");
     XLSX.writeFile(wb, `Reporte_Desayunos_STOL.xlsx`);
 }
 
-// --- INICIALIZACIÓN ---
-
+// --- INICIALIZACIÓN FINAL ---
 document.addEventListener('DOMContentLoaded', () => {
     mostrarPanelSiEstaLogueado();
     actualizarProgreso();
@@ -352,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('✅ App lista para uso Offline'))
-            .catch(err => console.log('❌ Error al registrar sw', err));
+            .then(reg => console.log('✅ App lista'))
+            .catch(err => console.log('❌ Error sw', err));
     });
 }
