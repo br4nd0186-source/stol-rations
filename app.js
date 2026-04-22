@@ -335,11 +335,14 @@ function exportarReporte() {
         }
     });
 
+// Generar archivo
     const ws = XLSX.utils.json_to_sheet(reporteFinal);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Control_Desayunos");
-    XLSX.writeFile(wb, `Reporte_STOL_Areas.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte STOL");
+    XLSX.writeFile(wb, `Reporte_Desayunos_STOL.xlsx`);
 }
+
+// --- INICIALIZACIÓN ---
 
 document.addEventListener('DOMContentLoaded', () => {
     mostrarPanelSiEstaLogueado();
@@ -347,9 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('✅ App lista para uso Offline'))
-      .catch(err => console.log('❌ Error al registrar sw', err));
-  });
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('✅ App lista para uso Offline'))
+            .catch(err => console.log('❌ Error al registrar sw', err));
+    });
 }
