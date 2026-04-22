@@ -259,7 +259,26 @@ function renderizarAuditoria() {
 function exportarReporte() {
     let reporteFinal = [];
     
-    // 1. Procesar lista maestra (original)
+    // --- LÓGICA DE CONTEO ---
+    const totalNomina = Object.keys(DATA).length;
+    const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
+    const pendientes = totalNomina - entregadosNomina - CEDIDOS.length;
+    const cambiados = CEDIDOS.length;
+    const agregadosExtra = INTENTOS.filter(reg => !DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")).length;
+    const granTotalEntregados = entregadosNomina + agregadosExtra;
+
+    // 1. CREAMOS EL BLOQUE DE RESUMEN (Primeras filas del Excel)
+    reporteFinal.push({ "DNI": "RESUMEN DE JORNADA", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "Total en Nómina:", "NOMBRE": totalNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "Entregados (de lista):", "NOMBRE": entregadosNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "Personal Agregado:", "NOMBRE": agregadosExtra, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "TOTAL ENTREGADOS:", "NOMBRE": granTotalEntregados, "AREA": "", "ESTADO": "CONFIRMADO", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "Pendientes (No vinieron):", "NOMBRE": pendientes, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "Raciones Cambiadas:", "NOMBRE": cambiados, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    reporteFinal.push({ "DNI": "", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" }); // Fila vacía separadora
+    reporteFinal.push({ "DNI": "DETALLE POR PERSONA", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+
+    // 2. PROCESAR LISTA DETALLADA
     Object.keys(DATA).forEach(dni => {
         const persona = DATA[dni];
         let estado = "NO RECOGIDO";
@@ -269,7 +288,6 @@ function exportarReporte() {
             estado = "ENTREGADO";
             detalle = "Entrega normal";
         }
-        
         if (CEDIDOS.includes(dni)) {
             estado = "CEDIDO";
             const transf = INTENTOS.find(reg => reg.DNI === dni && reg.Estado === "CEDIDO");
@@ -279,12 +297,31 @@ function exportarReporte() {
         reporteFinal.push({
             "DNI": dni,
             "NOMBRE": persona.nombre,
-            "AREA": persona.area, // Incluimos el área en el Excel
+            "AREA": persona.area,
             "ESTADO": estado,
-            "OBSERVACIÓN / REEMPLAZO": detalle
+            "OBSERVACIÓN": detalle
         });
     });
 
+    // 3. AGREGAR LOS EXTRAS AL FINAL
+    INTENTOS.forEach(reg => {
+        if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
+            reporteFinal.push({
+                "DNI": reg.DNI,
+                "NOMBRE": reg.Nombre,
+                "AREA": "ADICIONAL / EXTRA",
+                "ESTADO": "ENTREGADO (EXTRA)",
+                "OBSERVACIÓN": reg.Referencia_Auditoria
+            });
+        }
+    });
+
+    // Generar archivo
+    const ws = XLSX.utils.json_to_sheet(reporteFinal);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte STOL");
+    XLSX.writeFile(wb, `Reporte_Desayunos_STOL.xlsx`);
+}
     // 2. Agregar los que entraron por excepción o adicionales
     INTENTOS.forEach(reg => {
         if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
