@@ -257,9 +257,7 @@ function renderizarAuditoria() {
 }
 
 function exportarReporte() {
-    let reporteFinal = [];
-    
-    // --- LÓGICA DE CONTEO ---
+    // --- 1. LÓGICA DE CONTEO (Se mantienen tus variables) ---
     const totalNomina = Object.keys(DATA).length;
     const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
     const cambiados = CEDIDOS.length;
@@ -267,17 +265,22 @@ function exportarReporte() {
     const granTotalEntregados = entregadosNomina + agregadosExtra;
     const pendientes = totalNomina - entregadosNomina - cambiados;
 
-    // 1. BLOQUE DE RESUMEN
-    reporteFinal.push({ "DNI": "RESUMEN DE JORNADA", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "Total en Nómina:", "NOMBRE": totalNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "Entregados (de lista):", "NOMBRE": entregadosNomina, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "Personal Agregado:", "NOMBRE": agregadosExtra, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "TOTAL ENTREGADOS:", "NOMBRE": granTotalEntregados, "AREA": "", "ESTADO": "CONFIRMADO", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "Pendientes (No vinieron):", "NOMBRE": pendientes, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "Raciones Cambiadas:", "NOMBRE": cambiados, "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
-    reporteFinal.push({ "DNI": "", "NOMBRE": "", "AREA": "", "ESTADO": "", "OBSERVACIÓN": "" });
+    // --- 2. CREACIÓN DE LA HOJA DE RESUMEN (Pestaña 1) ---
+    const resumenData = [
+        ["INDICADOR", "CANTIDAD", "ESTADO"],
+        ["Total en Nómina", totalNomina, ""],
+        ["Entregados (de lista)", entregadosNomina, ""],
+        ["Personal Agregado (Extra)", agregadosExtra, ""],
+        ["TOTAL GENERAL ENTREGADOS", granTotalEntregados, "CONFIRMADO"],
+        ["Pendientes (No vinieron)", pendientes, ""],
+        ["Raciones Cambiadas", cambiados, ""]
+    ];
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
 
-    // 2. DETALLE POR PERSONA
+    // --- 3. CREACIÓN DE LA HOJA DE DETALLE (Pestaña 2) ---
+    let detalleData = [];
+
+    // Detalle del personal en nómina
     Object.keys(DATA).forEach(dni => {
         const persona = DATA[dni];
         let estado = "NO RECOGIDO";
@@ -293,7 +296,7 @@ function exportarReporte() {
             detalle = transf ? transf.Referencia_Auditoria : "Ración transferida";
         }
 
-        reporteFinal.push({
+        detalleData.push({
             "DNI": dni,
             "NOMBRE": persona.nombre,
             "AREA": persona.area,
@@ -302,10 +305,10 @@ function exportarReporte() {
         });
     });
 
-    // 3. EXTRAS
+    // Agregar el personal adicional/extra al final de la lista de detalle
     INTENTOS.forEach(reg => {
         if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
-            reporteFinal.push({
+            detalleData.push({
                 "DNI": reg.DNI,
                 "NOMBRE": reg.Nombre,
                 "AREA": "ADICIONAL / EXTRA",
@@ -315,10 +318,16 @@ function exportarReporte() {
         }
     });
 
-    const ws = XLSX.utils.json_to_sheet(reporteFinal);
+    const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
+
+    // --- 4. ENSAMBLAJE DEL LIBRO ---
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte STOL");
-    XLSX.writeFile(wb, `Reporte_Desayunos_STOL.xlsx`);
+    XLSX.utils.book_append_sheet(wb, wsResumen, "RESUMEN");
+    XLSX.utils.book_append_sheet(wb, wsDetalle, "DETALLE DE ENTREGAS");
+
+    // Descarga del archivo
+    const fecha = new Date().toLocaleDateString('es-PE').replace(/\//g, '-');
+    XLSX.writeFile(wb, `Reporte_STOL_${fecha}.xlsx`);
 }
 
 // --- INICIALIZACIÓN FINAL ---
