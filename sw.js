@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stol-rations-v5';
+const CACHE_NAME = 'stol-rations-v6';
 const ASSETS = [
   './',
   './index.html',
