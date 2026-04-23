@@ -210,35 +210,44 @@ function cargarListaExcel(input) {
     reader.onload = (e) => {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type: 'array'});
-        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         
-        // --- LIMPIEZA TOTAL PARA NUEVO PROCESO ---
-        // Esto borra los datos del proceso anterior al subir una lista nueva
+        // Buscamos específicamente la hoja llamada "DESAYUNOS"
+        const nombreHoja = "DESAYUNOS";
+        const hoja = wb.Sheets[nombreHoja];
+        
+        if (!hoja) {
+            return alert("❌ Error: No se encontró la hoja llamada 'DESAYUNOS'");
+        }
+
+        // Convertimos a JSON. El parámetro 'range: 1' es para saltar 
+        // la fila de "DESAYUNOS 24/04/2026" y empezar en los encabezados
+        const json = XLSX.utils.sheet_to_json(hoja, { range: 1 });
+        
+        // --- LIMPIEZA TOTAL ---
         DATA = {};
         ENTREGADOS = [];
         INTENTOS = [];
         CEDIDOS = [];
-        
-        // Limpiamos también el almacenamiento del navegador (localStorage)
         localStorage.removeItem('STOL_ENTREGADOS');
         localStorage.removeItem('STOL_INTENTOS');
         localStorage.removeItem('STOL_CEDIDOS');
 
-        // --- CARGA DE NUEVA DATA ---
+        // --- CARGA DE DATA SEGÚN TU NUEVO FORMATO ---
         json.forEach(f => {
+            // Validamos que la fila tenga un DNI
             if(f.DNI) {
                 DATA[String(f.DNI)] = { 
-                    nombre: f.NOMBRE, 
+                    // Mapeamos "APELLIDOS" de tu Excel a "nombre" del sistema
+                    nombre: f.APELLIDOS || "SIN NOMBRE", 
+                    // Mapeamos "AREA" tal cual viene
                     area: f.AREA || "SIN ÁREA" 
                 };
             }
         });
         
-        // Guardamos la nueva lista maestra
         localStorage.setItem('STOL_DATA', JSON.stringify(DATA));
-        
-        alert("♻️ Sistema reiniciado: Nueva lista cargada y registros anteriores limpiados.");
-        location.reload(); // Recargamos para que el contador de raciones vuelva a 0
+        alert(`♻️ Lista "${nombreHoja}" cargada con éxito.`);
+        location.reload();
     };
     reader.readAsArrayBuffer(file);
 }
@@ -257,7 +266,7 @@ function renderizarAuditoria() {
 }
 
 function exportarReporte() {
-    // --- 1. LÓGICA DE CONTEO (Se mantienen tus variables) ---
+    // --- 1. LÓGICA DE CONTEO ---
     const totalNomina = Object.keys(DATA).length;
     const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
     const cambiados = CEDIDOS.length;
@@ -265,7 +274,7 @@ function exportarReporte() {
     const granTotalEntregados = entregadosNomina + agregadosExtra;
     const pendientes = totalNomina - entregadosNomina - cambiados;
 
-    // --- 2. CREACIÓN DE LA HOJA DE RESUMEN (Pestaña 1) ---
+    // --- 2. HOJA DE RESUMEN ---
     const resumenData = [
         ["INDICADOR", "CANTIDAD", "ESTADO"],
         ["Total en Nómina", totalNomina, ""],
@@ -277,7 +286,7 @@ function exportarReporte() {
     ];
     const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
 
-    // --- 3. CREACIÓN DE LA HOJA DE DETALLE (Pestaña 2) ---
+    // --- 3. HOJA DE DETALLE ---
     let detalleData = [];
 
     // Detalle del personal en nómina
@@ -298,19 +307,19 @@ function exportarReporte() {
 
         detalleData.push({
             "DNI": dni,
-            "NOMBRE": persona.nombre,
+            "APELLIDOS": persona.nombre, // <-- CORRECTO: Coincide con tu base de datos
             "AREA": persona.area,
             "ESTADO": estado,
             "OBSERVACIÓN": detalle
         });
     });
 
-    // Agregar el personal adicional/extra al final de la lista de detalle
+    // Detalle del personal adicional/extra
     INTENTOS.forEach(reg => {
         if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
             detalleData.push({
                 "DNI": reg.DNI,
-                "NOMBRE": reg.Nombre,
+                "APELLIDOS": reg.Nombre, // <-- CAMBIADO: De "NOMBRE" a "APELLIDOS" para que no se cree una columna nueva
                 "AREA": "ADICIONAL / EXTRA",
                 "ESTADO": "ENTREGADO (EXTRA)",
                 "OBSERVACIÓN": reg.Referencia_Auditoria
@@ -320,14 +329,13 @@ function exportarReporte() {
 
     const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
 
-    // --- 4. ENSAMBLAJE DEL LIBRO ---
+    // --- 4. ENSAMBLAJE ---
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsResumen, "RESUMEN");
     XLSX.utils.book_append_sheet(wb, wsDetalle, "DETALLE DE ENTREGAS");
 
-    // Descarga del archivo
     const fecha = new Date().toLocaleDateString('es-PE').replace(/\//g, '-');
-    XLSX.writeFile(wb, `Reporte_STOL_${fecha}.xlsx`);
+    XLSX.writeFile(wb, `Reporte_DESAYUNOS_${fecha}.xlsx`);
 }
 
 // --- INICIALIZACIÓN FINAL ---
