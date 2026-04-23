@@ -266,10 +266,12 @@ function renderizarAuditoria() {
 }
 
 function exportarReporte() {
-    // --- 1. LÓGICA DE CONTEO ---
+    // --- 1. LÓGICA DE CONTEO (Restaurada) ---
     const totalNomina = Object.keys(DATA).length;
+    // Filtramos los entregados que pertenecen a la nómina actual
     const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
     const cambiados = CEDIDOS.length;
+    // Contamos los extras (excepciones que no estaban en la lista original)
     const agregadosExtra = INTENTOS.filter(reg => !DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")).length;
     const granTotalEntregados = entregadosNomina + agregadosExtra;
     const pendientes = totalNomina - entregadosNomina - cambiados;
@@ -294,20 +296,35 @@ function exportarReporte() {
         const persona = DATA[dni];
         let estado = "NO RECOGIDO";
         let detalle = "---";
+        let fechaCol = "---"; 
+        let horaCol = "---";
         
-        if (ENTREGADOS.includes(dni)) {
-            estado = "ENTREGADO";
-            detalle = "Entrega normal";
-        }
-        if (CEDIDOS.includes(dni)) {
-            estado = "CEDIDO";
-            const transf = INTENTOS.find(reg => reg.DNI === dni && reg.Estado === "CEDIDO");
-            detalle = transf ? transf.Referencia_Auditoria : "Ración transferida";
+        if (ENTREGADOS.includes(dni) || CEDIDOS.includes(dni)) {
+            const esCedido = CEDIDOS.includes(dni);
+            estado = esCedido ? "CEDIDO" : "ENTREGADO";
+            
+            // Buscamos el registro en INTENTOS para sacar el tiempo
+            const reg = INTENTOS.find(r => r.DNI === dni && (r.Estado === "ENTREGADO" || r.Estado === "CEDIDO" || r.Estado === "EXCEPCIÓN"));
+            
+            if (reg && reg.Fecha_Hora) {
+                const partes = reg.Fecha_Hora.split(','); 
+                fechaCol = partes[0] ? partes[0].trim() : "---";
+                horaCol = partes[1] ? partes[1].trim() : "---";
+            }
+            
+            if (esCedido) {
+                const transf = INTENTOS.find(r => r.DNI === dni && r.Estado === "CEDIDO");
+                detalle = transf ? transf.Referencia_Auditoria : "Ración transferida";
+            } else {
+                detalle = "Entrega normal";
+            }
         }
 
         detalleData.push({
+            "FECHA": fechaCol,
+            "HORA": horaCol,
             "DNI": dni,
-            "APELLIDOS": persona.nombre, // <-- CORRECTO: Coincide con tu base de datos
+            "APELLIDOS": persona.nombre,
             "AREA": persona.area,
             "ESTADO": estado,
             "OBSERVACIÓN": detalle
@@ -317,9 +334,12 @@ function exportarReporte() {
     // Detalle del personal adicional/extra
     INTENTOS.forEach(reg => {
         if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
+            const partes = reg.Fecha_Hora.split(',');
             detalleData.push({
+                "FECHA": partes[0] ? partes[0].trim() : "---",
+                "HORA": partes[1] ? partes[1].trim() : "---",
                 "DNI": reg.DNI,
-                "APELLIDOS": reg.Nombre, // <-- CAMBIADO: De "NOMBRE" a "APELLIDOS" para que no se cree una columna nueva
+                "APELLIDOS": reg.Nombre,
                 "AREA": "ADICIONAL / EXTRA",
                 "ESTADO": "ENTREGADO (EXTRA)",
                 "OBSERVACIÓN": reg.Referencia_Auditoria
@@ -329,13 +349,17 @@ function exportarReporte() {
 
     const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
 
-    // --- 4. ENSAMBLAJE ---
+    // --- 4. ENSAMBLAJE Y DESCARGA ---
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsResumen, "RESUMEN");
     XLSX.utils.book_append_sheet(wb, wsDetalle, "DETALLE DE ENTREGAS");
 
-    const fecha = new Date().toLocaleDateString('es-PE').replace(/\//g, '-');
-    XLSX.writeFile(wb, `Reporte_DESAYUNOS_${fecha}.xlsx`);
+    const ahora = new Date();
+    const fechaArchivo = ahora.toLocaleDateString('es-PE').replace(/\//g, '-');
+    const horaArchivo = ahora.getHours() + "h" + ahora.getMinutes() + "m";
+    
+    // ESTA LÍNEA ES LA QUE ACTIVA LA DESCARGA
+    XLSX.writeFile(wb, `Reporte_STOL_${fechaArchivo}_${horaArchivo}.xlsx`);
 }
 
 // --- INICIALIZACIÓN FINAL ---
