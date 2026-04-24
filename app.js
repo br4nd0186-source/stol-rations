@@ -68,22 +68,37 @@ function validarAcceso(inputUsuario) {
     }
 }
 
+// --- NUEVOS ESTADOS ---
+let ENVASES_PENDIENTES = JSON.parse(localStorage.getItem('STOL_ENVASES')) || []; 
+
 function procesarMarcacion(dni) {
     const persona = DATA[dni];
     window.dniActualGlobal = dni;
-
-    // Mensaje con Nombre + Área
     const infoPersonal = `${persona.nombre} (${persona.area})`;
 
+    // LOGICA DE RETORNO DE ENVASE
+    if (ENVASES_PENDIENTES.includes(dni)) {
+        // Si el DNI ya está en la lista de envases, significa que lo está devolviendo
+        ENVASES_PENDIENTES = ENVASES_PENDIENTES.filter(id => id !== dni);
+        localStorage.setItem('STOL_ENVASES', JSON.stringify(ENVASES_PENDIENTES));
+        
+        registrar(dni, persona.nombre, "ENVASE DEVUELTO", "retorno", "Entregó embase");
+        actualizarUI(`♻️ ENVASE RECIBIDO: ${persona.nombre}`, "mensaje-exito", false);
+        return; // Salimos para no procesar como ración nueva
+    }
+
+    // LOGICA DE ENTREGA DE DESAYUNO
     if (ENTREGADOS.includes(dni) || CEDIDOS.includes(dni)) {
-        actualizarUI(`⚠️ YA UTILIZADO: ${infoPersonal}`, "mensaje-info", false);
+        actualizarUI(`⚠️ YA RECOGIÓ RACIÓN: ${infoPersonal}`, "mensaje-info", false);
     } else {
         ENTREGADOS.push(dni);
-        localStorage.setItem('STOL_ENTREGADOS', JSON.stringify(ENTREGADOS));
-        registrar(dni, persona.nombre, "ENTREGADO", "valido", "Normal");
+        ENVASES_PENDIENTES.push(dni); // Registramos que se lleva un envase
         
-        // El mensaje ahora dirá por ejemplo: "✅ DESAYUNO OK: TRUJILLO PIÑAN RICHARD (ALMACEN)"
-        actualizarUI(`✅ DESAYUNO OK: ${infoPersonal}`, "mensaje-exito", false);
+        localStorage.setItem('STOL_ENTREGADOS', JSON.stringify(ENTREGADOS));
+        localStorage.setItem('STOL_ENVASES', JSON.stringify(ENVASES_PENDIENTES));
+        
+        registrar(dni, persona.nombre, "ENTREGADO + ENVASE", "valido", "Se llevó envase");
+        actualizarUI(`✅ DESAYUNO OK: ${infoPersonal}\n(Envase pendiente de retorno)`, "mensaje-exito", false);
     }
 }
 
@@ -266,100 +281,100 @@ function renderizarAuditoria() {
 }
 
 function exportarReporte() {
-    // --- 1. LÓGICA DE CONTEO (Restaurada) ---
-    const totalNomina = Object.keys(DATA).length;
-    // Filtramos los entregados que pertenecen a la nómina actual
-    const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
-    const cambiados = CEDIDOS.length;
-    // Contamos los extras (excepciones que no estaban en la lista original)
-    const agregadosExtra = INTENTOS.filter(reg => !DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")).length;
-    const granTotalEntregados = entregadosNomina + agregadosExtra;
-    const pendientes = totalNomina - entregadosNomina - cambiados;
+    try {
+        const envasesEnPoderDelPersonal = JSON.parse(localStorage.getItem('STOL_ENVASES')) || [];
 
-    // --- 2. HOJA DE RESUMEN ---
-    const resumenData = [
-        ["INDICADOR", "CANTIDAD", "ESTADO"],
-        ["Total en Nómina", totalNomina, ""],
-        ["Entregados (de lista)", entregadosNomina, ""],
-        ["Personal Agregado (Extra)", agregadosExtra, ""],
-        ["TOTAL GENERAL ENTREGADOS", granTotalEntregados, "CONFIRMADO"],
-        ["Pendientes (No vinieron)", pendientes, ""],
-        ["Raciones Cambiadas", cambiados, ""]
-    ];
-    const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        // 1. CONTEO DE RESUMEN
+        const totalNomina = Object.keys(DATA).length;
+        const entregadosNomina = ENTREGADOS.filter(dni => DATA[dni]).length;
+        const cambiados = CEDIDOS.length;
+        const agregadosExtra = INTENTOS.filter(reg => !DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")).length;
+        const granTotalEntregados = entregadosNomina + agregadosExtra;
 
-    // --- 3. HOJA DE DETALLE ---
-    let detalleData = [];
+        const resumenData = [
+            ["INDICADOR", "CANTIDAD"],
+            ["Total en Nómina", totalNomina],
+            ["Entregados (de lista)", entregadosNomina],
+            ["Extra / Excepciones", agregadosExtra],
+            ["TOTAL RACIONES SALIDAS", granTotalEntregados],
+            ["Envases actualmente afuera", envasesEnPoderDelPersonal.length]
+        ];
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
 
-    // Detalle del personal en nómina
-    Object.keys(DATA).forEach(dni => {
-        const persona = DATA[dni];
-        let estado = "NO RECOGIDO";
-        let detalle = "---";
-        let fechaCol = "---"; 
-        let horaCol = "---";
-        
-        if (ENTREGADOS.includes(dni) || CEDIDOS.includes(dni)) {
-            const esCedido = CEDIDOS.includes(dni);
-            estado = esCedido ? "CEDIDO" : "ENTREGADO";
-            
-            // Buscamos el registro en INTENTOS para sacar el tiempo
-            const reg = INTENTOS.find(r => r.DNI === dni && (r.Estado === "ENTREGADO" || r.Estado === "CEDIDO" || r.Estado === "EXCEPCIÓN"));
-            
-            if (reg && reg.Fecha_Hora) {
-                const partes = reg.Fecha_Hora.split(','); 
-                fechaCol = partes[0] ? partes[0].trim() : "---";
-                horaCol = partes[1] ? partes[1].trim() : "---";
+        // 2. HOJA DE DETALLE
+        let detalleData = [];
+        Object.keys(DATA).forEach(dni => {
+            const persona = DATA[dni];
+            let estadoRacion = "NO RECOGIDO";
+            let estadoEnvase = "N.A. (No salió)";
+            let fechaCol = "---"; 
+            let horaCol = "---";
+
+            if (ENTREGADOS.includes(dni) || CEDIDOS.includes(dni)) {
+                estadoRacion = CEDIDOS.includes(dni) ? "CEDIDO" : "ENTREGADO";
+                
+                if (envasesEnPoderDelPersonal.includes(dni)) {
+                    estadoEnvase = "❌ PENDIENTE (Lo tiene el operario)";
+                } else {
+                    estadoEnvase = "✅ DEVUELTO";
+                }
+
+                const reg = INTENTOS.find(r => r.DNI === dni && (r.Estado.includes("ENTREGADO") || r.Estado === "CEDIDO"));
+                if (reg && reg.Fecha_Hora) {
+                    const partes = reg.Fecha_Hora.split(','); 
+                    fechaCol = partes[0] ? partes[0].trim() : "---";
+                    horaCol = partes[1] ? partes[1].trim() : "---";
+                }
             }
-            
-            if (esCedido) {
-                const transf = INTENTOS.find(r => r.DNI === dni && r.Estado === "CEDIDO");
-                detalle = transf ? transf.Referencia_Auditoria : "Ración transferida";
-            } else {
-                detalle = "Entrega normal";
-            }
-        }
 
-        detalleData.push({
-            "FECHA": fechaCol,
-            "HORA": horaCol,
-            "DNI": dni,
-            "APELLIDOS": persona.nombre,
-            "AREA": persona.area,
-            "ESTADO": estado,
-            "OBSERVACIÓN": detalle
-        });
-    });
-
-    // Detalle del personal adicional/extra
-    INTENTOS.forEach(reg => {
-        if (!DATA[reg.DNI] && (reg.Estado === "EXCEPCIÓN" || reg.Estado === "RECIBE")) {
-            const partes = reg.Fecha_Hora.split(',');
             detalleData.push({
-                "FECHA": partes[0] ? partes[0].trim() : "---",
-                "HORA": partes[1] ? partes[1].trim() : "---",
-                "DNI": reg.DNI,
-                "APELLIDOS": reg.Nombre,
-                "AREA": "ADICIONAL / EXTRA",
-                "ESTADO": "ENTREGADO (EXTRA)",
-                "OBSERVACIÓN": reg.Referencia_Auditoria
+                "FECHA": fechaCol,
+                "HORA": horaCol,
+                "DNI": dni,
+                "APELLIDOS": persona.nombre,
+                "AREA": persona.area,
+                "ESTADO RACIÓN": estadoRacion,
+                "ESTADO ENVASE": estadoEnvase,
+                "OBSERVACIÓN": estadoEnvase.includes("PENDIENTE") ? "Debe retornar táper" : "Todo conforme"
             });
+        });
+
+        const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
+
+        // 3. HOJA DE MERMAS
+        const conteoAreas = {};
+        Object.keys(DATA).forEach(dni => {
+            const area = DATA[dni].area || "SIN ÁREA";
+            if (!conteoAreas[area]) conteoAreas[area] = { pedidos: 0, recogidos: 0 };
+            conteoAreas[area].pedidos++;
+            if (ENTREGADOS.includes(dni)) conteoAreas[area].recogidos++;
+        });
+
+        const mermasData = [["ÁREA", "SOLICITADOS", "RECOGIDOS", "MERMA", "%"]];
+        for (const area in conteoAreas) {
+            const d = conteoAreas[area];
+            const merma = d.pedidos - d.recogidos;
+            const cumple = d.pedidos > 0 ? ((d.recogidos / d.pedidos) * 100).toFixed(1) + "%" : "0%";
+            mermasData.push([area, d.pedidos, d.recogidos, merma, cumple]);
         }
-    });
+        const wsMermas = XLSX.utils.aoa_to_sheet(mermasData);
 
-    const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
+        // 4. GENERACIÓN DEL ARCHIVO CON NOMBRE DINÁMICO
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsResumen, "RESUMEN");
+        XLSX.utils.book_append_sheet(wb, wsDetalle, "DETALLE");
+        XLSX.utils.book_append_sheet(wb, wsMermas, "MERMAS POR AREA");
 
-    // --- 4. ENSAMBLAJE Y DESCARGA ---
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsResumen, "RESUMEN");
-    XLSX.utils.book_append_sheet(wb, wsDetalle, "DETALLE DE ENTREGAS");
+        // Lógica para el nombre del reporte: Reporte_Desayuno_DD-MM-YYYY
+        const d = new Date();
+        const fechaHoy = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+        const nombreArchivo = `Reporte_Desayuno_${fechaHoy}.xlsx`;
+        
+        XLSX.writeFile(wb, nombreArchivo);
 
-    const ahora = new Date();
-    const fechaArchivo = ahora.toLocaleDateString('es-PE').replace(/\//g, '-');
-    const horaArchivo = ahora.getHours() + "h" + ahora.getMinutes() + "m";
-    
-    // ESTA LÍNEA ES LA QUE ACTIVA LA DESCARGA
-    XLSX.writeFile(wb, `Reporte_STOL_${fechaArchivo}_${horaArchivo}.xlsx`);
+    } catch (error) {
+        alert("Error: " + error.message);
+    }
 }
 
 // --- INICIALIZACIÓN FINAL ---
